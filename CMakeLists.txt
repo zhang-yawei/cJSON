@@ -1,247 +1,164 @@
-set(CMAKE_LEGACY_CYGWIN_WIN32 0)
-cmake_minimum_required(VERSION 2.8.5)
+cmake_minimum_required(VERSION 3.10)
+project(cJSON)
 
-project(cJSON C)
+set(CMAKE_CXX_STANDARD 11)
 
-include(GNUInstallDirs)
+include_directories(.)
+include_directories(tests)
+include_directories(tests/unity/examples)
+include_directories(tests/unity/examples/example_1/src)
+include_directories(tests/unity/examples/example_2/src)
+include_directories(tests/unity/examples/example_3/helper)
+include_directories(tests/unity/examples/example_3/src)
+include_directories(tests/unity/extras/fixture/src)
+include_directories(tests/unity/extras/fixture/test)
+include_directories(tests/unity/src)
+include_directories(tests/unity/test/expectdata)
+include_directories(tests/unity/test/testdata)
 
-set(PROJECT_VERSION_MAJOR 1)
-set(PROJECT_VERSION_MINOR 7)
-set(PROJECT_VERSION_PATCH 7)
-set(CJSON_VERSION_SO 1)
-set(CJSON_UTILS_VERSION_SO 1)
-set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
-
-
-set(custom_compiler_flags)
-
-include(CheckCCompilerFlag)
-option(ENABLE_CUSTOM_COMPILER_FLAGS "Enables custom compiler flags" ON)
-if (ENABLE_CUSTOM_COMPILER_FLAGS)
-    if (("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang") OR ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU"))
-        list(APPEND custom_compiler_flags
-            -std=c89
-            -pedantic
-            -Wall
-            -Wextra
-            -Werror
-            -Wstrict-prototypes
-            -Wwrite-strings
-            -Wshadow
-            -Winit-self
-            -Wcast-align
-            -Wformat=2
-            -Wmissing-prototypes
-            -Wstrict-overflow=2
-            -Wcast-qual
-            -Wundef
-            -Wswitch-default
-            -Wconversion
-            -Wc++-compat
-            -fstack-protector-strong
-            -Wcomma
-            -Wdouble-promotion
-            -Wparentheses
-            -Wformat-overflow
-            -Wunused-macros
-            -Wmissing-variable-declarations
-            -Wused-but-marked-unused
-            -Wswitch-enum
-        )
-    elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
-        list(APPEND custom_compiler_flags
-            /GS
-            /Za
-            /sdl
-            /W4
-        )
-    endif()
-endif()
-
-option(ENABLE_SANITIZERS "Enables AddressSanitizer and UndefinedBehaviorSanitizer." OFF)
-if (ENABLE_SANITIZERS)
-    list(APPEND custom_compiler_flags
-        -fno-omit-frame-pointer
-        -fsanitize=address
-        -fsanitize=undefined
-        -fsanitize=float-divide-by-zero
-        -fsanitize=float-cast-overflow
-        -fsanitize-address-use-after-scope
-        -fsanitize=integer
-        -01
-        -fno-sanitize-recover
-        )
-endif()
-
-option(ENABLE_SAFE_STACK "Enables the SafeStack instrumentation pass by the Code Pointer Integrity Project" OFF)
-if (ENABLE_SAFE_STACK)
-    if (ENABLE_SANITIZERS)
-        message(FATAL_ERROR "ENABLE_SAFE_STACK cannot be used in combination with ENABLE_SANITIZERS")
-    endif()
-    list(APPEND custom_compiler_flags
-        -fsanitize=safe-stack
-        )
-endif()
-
-option(ENABLE_PUBLIC_SYMBOLS "Export library symbols." On)
-if (ENABLE_PUBLIC_SYMBOLS)
-    list(APPEND custom_compiler_flags -fvisibility=hidden)
-    add_definitions(-DCJSON_EXPORT_SYMBOLS -DCJSON_API_VISIBILITY)
-endif()
-option(ENABLE_HIDDEN_SYMBOLS "Hide library symbols." Off)
-if (ENABLE_HIDDEN_SYMBOLS)
-    add_definitions(-DCJSON_HIDE_SYMBOLS -UCJSON_API_VISIBILITY)
-endif()
-
-# apply custom compiler flags
-foreach(compiler_flag ${custom_compiler_flags})
-    #remove problematic characters
-    string(REGEX REPLACE "[^a-zA-Z0-9]" "" current_variable ${compiler_flag})
-
-    CHECK_C_COMPILER_FLAG(${compiler_flag} "FLAG_SUPPORTED_${current_variable}")
-    if (FLAG_SUPPORTED_${current_variable})
-        list(APPEND supported_compiler_flags)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${compiler_flag}")
-    endif()
-endforeach()
-
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${supported_compiler_flags}")
-
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
-option(ENABLE_TARGET_EXPORT "Enable exporting of CMake targets. Disable when it causes problems!" ON)
-
-#cJSON
-set(CJSON_LIB cjson)
-
-file(GLOB HEADERS cJSON.h)
-set(SOURCES cJSON.c)
-
-option(BUILD_SHARED_AND_STATIC_LIBS "Build both shared and static libraries" Off)
-option(CJSON_OVERRIDE_BUILD_SHARED_LIBS "Override BUILD_SHARED_LIBS with CJSON_BUILD_SHARED_LIBS" OFF)
-option(CJSON_BUILD_SHARED_LIBS "Overrides BUILD_SHARED_LIBS if CJSON_OVERRIDE_BUILD_SHARED_LIBS is enabled" ON)
-
-if ((CJSON_OVERRIDE_BUILD_SHARED_LIBS AND CJSON_BUILD_SHARED_LIBS) OR ((NOT CJSON_OVERRIDE_BUILD_SHARED_LIBS) AND BUILD_SHARED_LIBS))
-    set(CJSON_LIBRARY_TYPE SHARED)
-else()
-    set(CJSON_LIBRARY_TYPE STATIC)
-endif()
-
-
-if (NOT BUILD_SHARED_AND_STATIC_LIBS)
-    add_library("${CJSON_LIB}" "${CJSON_LIBRARY_TYPE}" "${HEADERS}" "${SOURCES}")
-else()
-    # See https://cmake.org/Wiki/CMake_FAQ#How_do_I_make_my_shared_and_static_libraries_have_the_same_root_name.2C_but_different_suffixes.3F
-    add_library("${CJSON_LIB}" SHARED "${HEADERS}" "${SOURCES}")
-    add_library("${CJSON_LIB}-static" STATIC "${HEADERS}" "${SOURCES}")
-    set_target_properties("${CJSON_LIB}-static" PROPERTIES OUTPUT_NAME "${CJSON_LIB}")
-    set_target_properties("${CJSON_LIB}-static" PROPERTIES PREFIX "lib")
-endif()
-if (NOT WIN32)
-    target_link_libraries("${CJSON_LIB}" m)
-endif()
-
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/library_config/libcjson.pc.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/libcjson.pc" @ONLY)
-
-install(FILES cJSON.h DESTINATION "${CMAKE_INSTALL_FULL_INCLUDEDIR}/cjson")
-install (FILES "${CMAKE_CURRENT_BINARY_DIR}/libcjson.pc" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig")
-install(TARGETS "${CJSON_LIB}" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}" EXPORT "${CJSON_LIB}")
-if (BUILD_SHARED_AND_STATIC_LIBS)
-    install(TARGETS "${CJSON_LIB}-static" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}")
-endif()
-if(ENABLE_TARGET_EXPORT)
-    # export library information for CMake projects
-    install(EXPORT "${CJSON_LIB}" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/cJSON")
-endif()
-
-set_target_properties("${CJSON_LIB}"
-    PROPERTIES
-        SOVERSION "${CJSON_VERSION_SO}"
-        VERSION "${PROJECT_VERSION}")
-
-#cJSON_Utils
-option(ENABLE_CJSON_UTILS "Enable building the cJSON_Utils library." OFF)
-if(ENABLE_CJSON_UTILS)
-    set(CJSON_UTILS_LIB cjson_utils)
-
-    file(GLOB HEADERS_UTILS cJSON_Utils.h)
-    set(SOURCES_UTILS cJSON_Utils.c)
-
-    if (NOT BUILD_SHARED_AND_STATIC_LIBS)
-        add_library("${CJSON_UTILS_LIB}" "${CJSON_LIBRARY_TYPE}" "${HEADERS_UTILS}" "${SOURCES_UTILS}")
-        target_link_libraries("${CJSON_UTILS_LIB}" "${CJSON_LIB}")
-    else()
-        add_library("${CJSON_UTILS_LIB}" SHARED "${HEADERS_UTILS}" "${SOURCES_UTILS}")
-        target_link_libraries("${CJSON_UTILS_LIB}" "${CJSON_LIB}")
-        add_library("${CJSON_UTILS_LIB}-static" STATIC "${HEADERS_UTILS}" "${SOURCES_UTILS}")
-        target_link_libraries("${CJSON_UTILS_LIB}-static" "${CJSON_LIB}-static")
-        set_target_properties("${CJSON_UTILS_LIB}-static" PROPERTIES OUTPUT_NAME "${CJSON_UTILS_LIB}")
-        set_target_properties("${CJSON_UTILS_LIB}-static" PROPERTIES PREFIX "lib")
-    endif()
-
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/library_config/libcjson_utils.pc.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/libcjson_utils.pc" @ONLY)
-
-    install(TARGETS "${CJSON_UTILS_LIB}" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}" EXPORT "${CJSON_UTILS_LIB}")
-    if (BUILD_SHARED_AND_STATIC_LIBS)
-        install(TARGETS "${CJSON_UTILS_LIB}-static" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}")
-    endif()
-    install(FILES cJSON_Utils.h DESTINATION "${CMAKE_INSTALL_FULL_INCLUDEDIR}/cjson")
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/libcjson_utils.pc" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig")
-    if(ENABLE_TARGET_EXPORT)
-      # export library information for CMake projects
-      install(EXPORT "${CJSON_UTILS_LIB}" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/cJSON")
-    endif()
-
-    set_target_properties("${CJSON_UTILS_LIB}"
-        PROPERTIES
-            SOVERSION "${CJSON_UTILS_VERSION_SO}"
-            VERSION "${PROJECT_VERSION}")
-endif()
-
-# create the other package config files
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/library_config/cJSONConfig.cmake.in"
-    ${PROJECT_BINARY_DIR}/cJSONConfig.cmake @ONLY)
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/library_config/cJSONConfigVersion.cmake.in"
-    ${PROJECT_BINARY_DIR}/cJSONConfigVersion.cmake @ONLY)
-
-# Install package config files
-install(FILES ${PROJECT_BINARY_DIR}/cJSONConfig.cmake
-    ${PROJECT_BINARY_DIR}/cJSONConfigVersion.cmake
-    DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/cJSON")
-
-option(ENABLE_CJSON_TEST "Enable building cJSON test" ON)
-if(ENABLE_CJSON_TEST)
-    enable_testing()
-
-    set(TEST_CJSON cJSON_test)
-    add_executable("${TEST_CJSON}" test.c)
-    target_link_libraries("${TEST_CJSON}" "${CJSON_LIB}")
-
-    add_test(NAME ${TEST_CJSON} COMMAND "${CMAKE_CURRENT_BINARY_DIR}/${TEST_CJSON}")
-
-    # Disable -fsanitize=float-divide-by-zero for cJSON_test
-    if (FLAG_SUPPORTED_fsanitizefloatdividebyzero)
-        if ("${CMAKE_VERSION}" VERSION_LESS "2.8.12")
-            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-sanitize=float-divide-by-zero")
-        else()
-            target_compile_options(${TEST_CJSON} PRIVATE "-fno-sanitize=float-divide-by-zero")
-        endif()
-    endif()
-
-    #"check" target that automatically builds everything and runs the tests
-    add_custom_target(check
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS ${TEST_CJSON})
-endif()
-
-# Enable the use of locales
-option(ENABLE_LOCALES "Enable the use of locales" ON)
-if(ENABLE_LOCALES)
-	add_definitions(-DENABLE_LOCALES)
-endif()
-
-add_subdirectory(tests)
-add_subdirectory(fuzzing)
+add_executable(cJSON
+        fuzzing/inputs/test1
+        fuzzing/inputs/test10
+        fuzzing/inputs/test11
+        fuzzing/inputs/test2
+        fuzzing/inputs/test3
+        fuzzing/inputs/test3.bu
+        fuzzing/inputs/test3.uf
+        fuzzing/inputs/test3.uu
+        fuzzing/inputs/test4
+        fuzzing/inputs/test5
+        fuzzing/inputs/test6
+        fuzzing/inputs/test7
+        fuzzing/inputs/test8
+        fuzzing/inputs/test9
+        fuzzing/afl-prepare-linux.sh
+        fuzzing/afl.c
+        fuzzing/afl.sh
+        fuzzing/CMakeLists.txt
+        fuzzing/json.dict
+        tests/inputs/test1
+        tests/inputs/test1.expected
+        tests/inputs/test10
+        tests/inputs/test10.expected
+        tests/inputs/test11
+        tests/inputs/test11.expected
+        tests/inputs/test2
+        tests/inputs/test2.expected
+        tests/inputs/test3
+        tests/inputs/test3.expected
+        tests/inputs/test4
+        tests/inputs/test4.expected
+        tests/inputs/test5
+        tests/inputs/test5.expected
+        tests/inputs/test6
+        tests/inputs/test7
+        tests/inputs/test7.expected
+        tests/inputs/test8
+        tests/inputs/test8.expected
+        tests/inputs/test9
+        tests/inputs/test9.expected
+        tests/json-patch-tests/cjson-utils-tests.json
+        tests/json-patch-tests/package.json
+        tests/json-patch-tests/README.md
+        tests/json-patch-tests/spec_tests.json
+        tests/json-patch-tests/tests.json
+        tests/unity/examples/example_1/src/ProductionCode.c
+        tests/unity/examples/example_1/src/ProductionCode.h
+        tests/unity/examples/example_1/src/ProductionCode2.c
+        tests/unity/examples/example_1/src/ProductionCode2.h
+        tests/unity/examples/example_1/test/test_runners/TestProductionCode2_Runner.c
+        tests/unity/examples/example_1/test/test_runners/TestProductionCode_Runner.c
+        tests/unity/examples/example_1/test/TestProductionCode.c
+        tests/unity/examples/example_1/test/TestProductionCode2.c
+        tests/unity/examples/example_2/src/ProductionCode.c
+        tests/unity/examples/example_2/src/ProductionCode.h
+        tests/unity/examples/example_2/src/ProductionCode2.c
+        tests/unity/examples/example_2/src/ProductionCode2.h
+        tests/unity/examples/example_2/test/test_runners/all_tests.c
+        tests/unity/examples/example_2/test/test_runners/TestProductionCode2_Runner.c
+        tests/unity/examples/example_2/test/test_runners/TestProductionCode_Runner.c
+        tests/unity/examples/example_2/test/TestProductionCode.c
+        tests/unity/examples/example_2/test/TestProductionCode2.c
+        tests/unity/examples/example_3/helper/UnityHelper.c
+        tests/unity/examples/example_3/helper/UnityHelper.h
+        tests/unity/examples/example_3/src/ProductionCode.c
+        tests/unity/examples/example_3/src/ProductionCode.h
+        tests/unity/examples/example_3/src/ProductionCode2.c
+        tests/unity/examples/example_3/src/ProductionCode2.h
+        tests/unity/examples/example_3/test/TestProductionCode.c
+        tests/unity/examples/example_3/test/TestProductionCode2.c
+        tests/unity/examples/unity_config.h
+        tests/unity/extras/fixture/src/unity_fixture.c
+        tests/unity/extras/fixture/src/unity_fixture.h
+        tests/unity/extras/fixture/src/unity_fixture_internals.h
+        tests/unity/extras/fixture/src/unity_fixture_malloc_overrides.h
+        tests/unity/extras/fixture/test/main/AllTests.c
+        tests/unity/extras/fixture/test/template_fixture_tests.c
+        tests/unity/extras/fixture/test/unity_fixture_Test.c
+        tests/unity/extras/fixture/test/unity_fixture_TestRunner.c
+        tests/unity/extras/fixture/test/unity_output_Spy.c
+        tests/unity/extras/fixture/test/unity_output_Spy.h
+        tests/unity/src/unity.c
+        tests/unity/src/unity.h
+        tests/unity/src/unity_internals.h
+        tests/unity/test/expectdata/testsample_cmd.c
+        tests/unity/test/expectdata/testsample_def.c
+        tests/unity/test/expectdata/testsample_head1.c
+        tests/unity/test/expectdata/testsample_head1.h
+        tests/unity/test/expectdata/testsample_mock_cmd.c
+        tests/unity/test/expectdata/testsample_mock_def.c
+        tests/unity/test/expectdata/testsample_mock_head1.c
+        tests/unity/test/expectdata/testsample_mock_head1.h
+        tests/unity/test/expectdata/testsample_mock_new1.c
+        tests/unity/test/expectdata/testsample_mock_new2.c
+        tests/unity/test/expectdata/testsample_mock_param.c
+        tests/unity/test/expectdata/testsample_mock_run1.c
+        tests/unity/test/expectdata/testsample_mock_run2.c
+        tests/unity/test/expectdata/testsample_mock_yaml.c
+        tests/unity/test/expectdata/testsample_new1.c
+        tests/unity/test/expectdata/testsample_new2.c
+        tests/unity/test/expectdata/testsample_param.c
+        tests/unity/test/expectdata/testsample_run1.c
+        tests/unity/test/expectdata/testsample_run2.c
+        tests/unity/test/expectdata/testsample_yaml.c
+        tests/unity/test/testdata/CException.h
+        tests/unity/test/testdata/cmock.h
+        tests/unity/test/testdata/Defs.h
+        tests/unity/test/testdata/mockMock.h
+        tests/unity/test/testdata/testRunnerGenerator.c
+        tests/unity/test/testdata/testRunnerGeneratorSmall.c
+        tests/unity/test/testdata/testRunnerGeneratorWithMocks.c
+        tests/unity/test/tests/testparameterized.c
+        tests/unity/test/tests/testunity.c
+        tests/cjson_add.c
+        tests/common.h
+        tests/compare_tests.c
+        tests/json_patch_tests.c
+        tests/misc_tests.c
+        tests/misc_utils_tests.c
+        tests/old_utils_tests.c
+        tests/parse_array.c
+        tests/parse_examples.c
+        tests/parse_hex4.c
+        tests/parse_number.c
+        tests/parse_object.c
+        tests/parse_string.c
+        tests/parse_value.c
+        tests/parse_with_opts.c
+        tests/print_array.c
+        tests/print_number.c
+        tests/print_object.c
+        tests/print_string.c
+        tests/print_value.c
+        tests/readme_examples.c
+        cJSON.c
+        cJSON.h
+        cJSON_Utils.c
+        cJSON_Utils.h
+        CMakeLists.txt
+        CONTRIBUTORS.md
+        LICENSE
+        Makefile
+        README.md
+        test.c
+        valgrind.supp)

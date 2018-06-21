@@ -162,6 +162,8 @@ static unsigned char* cJSON_strdup(const unsigned char* string, const internal_h
     {
         return NULL;
     }
+    //memcpy指的是c和c++使用的内存拷贝函数，memcpy函数的功能是从源src所指的内存地址的起始位置开始拷贝n个字节到目标dest所指的内存地址的起始位置中。
+//    void *memcpy(void *dest, const void *src, size_t n);
     memcpy(copy, string, length);
 
     return copy;
@@ -199,11 +201,15 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 }
 
 /* Internal constructor. */
+// 生成一个节点
 static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
 {
     cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
     if (node)
     {
+        // 将node指针后的sizeof(cJSON)个字符,指定为\0;
+        //memset是计算机中C/C++语言函数。将s所指向的某一块内存中的后n个 字节的内容全部设置为ch指定的ASCII值，
+        // 第一个值为指定的内存地址，块的大小由第三个参数指定，这个函数通常为新申请的内存做初始化工作， 其返回值为s。
         memset(node, '\0', sizeof(cJSON));
     }
 
@@ -211,6 +217,7 @@ static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
 }
 
 /* Delete a cJSON structure. */
+//  释放cJSON以及其子节点.
 CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
 {
     cJSON *next = NULL;
@@ -2318,7 +2325,9 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateString(const char *string)
     cJSON *item = cJSON_New_Item(&global_hooks);
     if(item)
     {
+        //生成节点,节点类型为string, 节点的值为传入的string
         item->type = cJSON_String;
+        // 赋值. 将string写入堆内存中.
         item->valuestring = (char*)cJSON_strdup((const unsigned char*)string, &global_hooks);
         if(!item->valuestring)
         {
